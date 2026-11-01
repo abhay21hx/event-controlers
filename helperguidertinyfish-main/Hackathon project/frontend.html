@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mission Control</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#e8edf2; --panel:#f8fafc; --ink:#13203a; --muted:#5c6b82; --line:#c9d3df;
+  --accent:#2447e6; --accent-ink:#fff;
+  --run:#b86e00; --run-bg:#fff0cf; --ok:#17734a; --ok-bg:#d6f2e3;
+  --bad:#a62a2a; --bad-bg:#fbdcdc; --idle-bg:#dde4ec;
+  --log-bg:#0f1b33; --log-ink:#bcd0f5;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#0e1626; --panel:#162238; --ink:#e4ebf7; --muted:#8fa0bb; --line:#2a3a57;
+    --accent:#6f8cff; --accent-ink:#0e1626;
+    --run:#ffc766; --run-bg:#3b2e12; --ok:#6fdca4; --ok-bg:#12372a;
+    --bad:#ff9a9a; --bad-bg:#3d1c1c; --idle-bg:#243350;
+    --log-bg:#0a1120; --log-ink:#a9c0ee;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0e1626; --panel:#162238; --ink:#e4ebf7; --muted:#8fa0bb; --line:#2a3a57;
+  --accent:#6f8cff; --accent-ink:#0e1626;
+  --run:#ffc766; --run-bg:#3b2e12; --ok:#6fdca4; --ok-bg:#12372a;
+  --bad:#ff9a9a; --bad-bg:#3d1c1c; --idle-bg:#243350;
+  --log-bg:#0a1120; --log-ink:#a9c0ee;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font:15px/1.5 "IBM Plex Sans",system-ui,sans-serif;min-height:100vh}
+.shell{max-width:1120px;margin:0 auto;padding:24px 20px 56px}
+header{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:16px;margin-bottom:20px}
+h1{font-size:30px;font-weight:600;letter-spacing:-.02em;margin:0}
+.sub{color:var(--muted);margin:2px 0 0}
+.conn{display:flex;gap:8px;align-items:center}
+.conn input{width:260px}
+.dot{width:10px;height:10px;border-radius:50%;background:var(--muted);flex:none}
+.dot.up{background:var(--ok)} .dot.down{background:var(--bad)}
+.strip{display:grid;grid-template-columns:repeat(4,1fr);border:1px solid var(--line);background:var(--panel);margin-bottom:20px}
+.strip div{padding:12px 16px;border-right:1px solid var(--line)}
+.strip div:last-child{border-right:0}
+.strip b{display:block;font-size:26px;font-weight:600;line-height:1.1}
+.strip span{color:var(--muted);font-size:13px}
+.grid{display:grid;grid-template-columns:360px 1fr;gap:20px;align-items:start}
+@media(max-width:860px){.grid{grid-template-columns:1fr}.strip{grid-template-columns:repeat(2,1fr)}.strip div:nth-child(2){border-right:0}.strip div:nth-child(-n+2){border-bottom:1px solid var(--line)}.conn input{width:180px}}
+section{background:var(--panel);border:1px solid var(--line);padding:18px}
+h2{font-size:16px;font-weight:600;margin:0 0 12px}
+label{display:block;font-size:13px;color:var(--muted);margin:10px 0 4px}
+input,textarea{width:100%;font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);padding:8px 10px;border-radius:4px}
+textarea{min-height:84px;resize:vertical}
+textarea.schema{font-family:"IBM Plex Mono",monospace;font-size:13px;min-height:60px}
+input:focus-visible,textarea:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.row{display:flex;gap:8px;margin-top:14px;flex-wrap:wrap}
+button{font:inherit;font-weight:500;padding:8px 14px;border-radius:4px;border:1px solid var(--accent);background:var(--accent);color:var(--accent-ink);cursor:pointer}
+button.ghost{background:transparent;color:var(--accent)}
+button.danger{background:transparent;color:var(--bad);border-color:var(--bad)}
+button.small{padding:3px 10px;font-size:13px}
+button:disabled{opacity:.5;cursor:not-allowed}
+table{width:100%;border-collapse:collapse}
+th{font-weight:500;color:var(--muted);font-size:13px;text-align:left;padding:6px 8px;border-bottom:1px solid var(--line)}
+td{padding:9px 8px;border-bottom:1px solid var(--line);vertical-align:middle}
+td.url{max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted)}
+tr.sel td{background:var(--bg)}
+.tbl{overflow-x:auto}
+.badge{display:inline-block;padding:1px 9px;border-radius:10px;font-size:12px;font-weight:500;background:var(--idle-bg)}
+.badge.running{background:var(--run-bg);color:var(--run)}
+.badge.completed{background:var(--ok-bg);color:var(--ok)}
+.badge.failed,.badge.cancelled{background:var(--bad-bg);color:var(--bad)}
+.empty{color:var(--muted);padding:18px 8px}
+pre{margin:0;white-space:pre-wrap;word-break:break-word;font:13px/1.5 "IBM Plex Mono",monospace;max-height:300px;overflow:auto}
+pre.log{background:var(--log-bg);color:var(--log-ink);padding:12px;border-radius:4px}
+pre.res{background:var(--bg);border:1px solid var(--line);padding:12px;border-radius:4px}
+.stack>*+*{margin-top:20px}
+.err{color:var(--bad);font-size:13px;margin-top:8px;min-height:1em}
+</style>
+</head>
+<body>
+<div class="shell">
+  <header>
+    <div>
+      <h1>Mission Control</h1>
+      <p class="sub">Send web agents on missions and follow them until they report back.</p>
+      <p class="sub" id="connectionHelp" role="status" hidden></p>
+      <p class="sub" id="dashboardLinkWrap" hidden>
+        Once the backend is running, open
+        <a id="dashboardLink" href="http://127.0.0.1:8000">http://127.0.0.1:8000</a>.
+      </p>
+    </div>
+    <div class="conn">
+      <span id="dot" class="dot" title="Backend connection"></span>
+      <input id="api" aria-label="Backend URL" placeholder="Backend URL, e.g. http://127.0.0.1:8000">
+      <button class="ghost" id="saveApi">Connect</button>
+    </div>
+  </header>
+
+  <div class="strip" aria-label="Mission totals">
+    <div><b id="nAll">0</b><span>Total missions</span></div>
+    <div><b id="nRun">0</b><span>In flight</span></div>
+    <div><b id="nOk">0</b><span>Completed</span></div>
+    <div><b id="nBad">0</b><span>Failed or cancelled</span></div>
+  </div>
+
+  <div class="grid">
+    <section>
+      <h2>New mission</h2>
+      <form id="form">
+        <label for="name">Mission name</label>
+        <input id="name" required placeholder="Competitor price check">
+        <label for="url">Target URL</label>
+        <input id="url" type="url" required placeholder="https://example.com/shop">
+        <label for="goal">Goal</label>
+        <textarea id="goal" required placeholder="Extract the first 10 product names and prices. Return JSON."></textarea>
+        <label for="schema">Output schema (optional JSON)</label>
+        <textarea id="schema" class="schema" placeholder='{"type":"object","properties":{"title":{"type":"string"}}}'></textarea>
+        <div class="row">
+          <button type="submit" id="go">Launch mission</button>
+          <button type="button" class="ghost" id="live">Launch and watch live</button>
+        </div>
+        <div class="err" id="err" role="alert"></div>
+      </form>
+    </section>
+
+    <div class="stack">
+      <section>
+        <h2>Missions</h2>
+        <div class="tbl">
+          <table>
+            <thead><tr><th>Name</th><th>Target</th><th>Status</th><th></th></tr></thead>
+            <tbody id="rows"></tbody>
+          </table>
+        </div>
+        <div class="empty" id="empty">No missions yet. Fill in the form to launch your first one.</div>
+      </section>
+
+      <section id="liveBox" hidden>
+        <h2>Live feed</h2>
+        <pre class="log" id="log"></pre>
+      </section>
+
+      <section id="detail" hidden>
+        <h2 id="dTitle">Result</h2>
+        <pre class="res" id="dBody"></pre>
+      </section>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  var $ = function(id){return document.getElementById(id)};
+  var API = "";
+  var savedAPI = "";
+  try { savedAPI = localStorage.getItem("mc_api") || ""; } catch(e){}
+  if(location.protocol !== "file:" && location.pathname === "/"){
+    API = location.origin;
+  } else {
+    API = savedAPI || "http://127.0.0.1:8000";
+  }
+  $("api").value = API;
+  var selectedId = null, polling = null;
+
+  function base(){ return $("api").value.trim().replace(/\/+$/,""); }
+  function showErr(msg){ $("err").textContent = msg || ""; }
+  function showConnectionHelp(msg){
+    $("connectionHelp").textContent = msg || "";
+    $("connectionHelp").hidden = !msg;
+    $("dashboardLinkWrap").hidden = !msg || location.protocol !== "file:";
+  }
+  function esc(s){ return String(s == null ? "" : s).replace(/[&<>"]/g, function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]}); }
+
+  function fetchError(err){
+    if(err instanceof TypeError){
+      if(location.protocol === "file:"){
+        return "The backend is not running or cannot be reached. Double-click Hackathon project\\start_backend.bat and keep its window open.";
+      }
+      return "Could not reach the backend. Start it at http://127.0.0.1:8000 and check that the Backend URL is correct. If it is running, check the browser console for a CORS or network error.";
+    }
+    return err.message || "Request failed.";
+  }
+
+  async function call(path, opts){
+    var r = await fetch(base() + path, opts);
+    if(!r.ok){
+      var message = "Backend returned " + r.status + " for " + path;
+      try {
+        var body = await r.json();
+        if(body.detail) message += ": " + body.detail;
+      } catch(e){}
+      throw new Error(message);
+    }
+    return r.json();
+  }
+
+  function readForm(){
+    var m = { name: $("name").value.trim(), url: $("url").value.trim(), goal: $("goal").value.trim() };
+    var s = $("schema").value.trim();
+    if(s){
+      try { m.output_schema = JSON.parse(s); }
+      catch(e){ throw new Error("The output schema is not valid JSON."); }
+    }
+    return m;
+  }
+
+  function render(list){
+    var tb = $("rows");
+    tb.innerHTML = "";
+    $("empty").hidden = list.length > 0;
+    var c = {run:0, ok:0, bad:0};
+    list.slice().reverse().forEach(function(m){
+      var st = (m.status || "queued").toLowerCase();
+      if(st === "running" || st === "queued" || st === "pending") c.run++;
+      else if(st === "completed") c.ok++;
+      else c.bad++;
+      var tr = document.createElement("tr");
+      if(m.id === selectedId) tr.className = "sel";
+      var active = (st === "running" || st === "queued" || st === "pending");
+      tr.innerHTML =
+        "<td>" + esc(m.name) + "</td>" +
+        "<td class='url' title='" + esc(m.url) + "'>" + esc(m.url) + "</td>" +
+        "<td><span class='badge " + esc(st) + "'>" + esc(st) + "</span></td>" +
+        "<td><button class='small ghost' data-view='" + esc(m.id) + "'>View result</button> " +
+        (active ? "<button class='small danger' data-abort='" + esc(m.id) + "'>Abort</button>" : "") + "</td>";
+      tb.appendChild(tr);
+    });
+    $("nAll").textContent = list.length;
+    $("nRun").textContent = c.run;
+    $("nOk").textContent = c.ok;
+    $("nBad").textContent = c.bad;
+  }
+
+  async function refresh(){
+    try {
+      var list = await call("/missions");
+      $("dot").className = "dot up";
+      $("dot").title = "Backend connected";
+      showConnectionHelp("");
+      render(list);
+      if(selectedId) loadDetail(selectedId, true);
+    } catch(e){
+      $("dot").className = "dot down";
+      $("dot").title = fetchError(e);
+      showConnectionHelp(fetchError(e));
+    }
+  }
+
+  async function loadDetail(id, quiet){
+    try {
+      var m = await call("/missions/" + encodeURIComponent(id));
+      selectedId = id;
+      $("detail").hidden = false;
+      $("dTitle").textContent = m.name + " (" + m.status + ")";
+      $("dBody").textContent = m.result == null ? "No result yet." : JSON.stringify(m.result, null, 2);
+    } catch(e){ if(!quiet) showErr(fetchError(e)); }
+  }
+
+  $("rows").addEventListener("click", async function(e){
+    var v = e.target.getAttribute("data-view"), a = e.target.getAttribute("data-abort");
+    if(v){ await loadDetail(v); refresh(); }
+    if(a){
+      try { await call("/missions/" + encodeURIComponent(a) + "/abort", {method:"POST"}); refresh(); }
+      catch(err){ showErr(fetchError(err)); }
+    }
+  });
+
+  $("saveApi").addEventListener("click", function(){
+    try { localStorage.setItem("mc_api", base()); } catch(e){}
+    if(location.protocol === "file:"){
+      fetch(base() + "/health").then(function(r){
+        if(!r.ok) throw new Error("Backend health check failed.");
+        return r.json();
+      }).then(function(){
+        location.replace(base() + "/");
+      }).catch(function(){
+        showConnectionHelp(fetchError(new TypeError("Backend unavailable")));
+      });
+    }
+    refresh();
+  });
+
+  function redirectToServedDashboard(){
+    if(location.protocol !== "file:") return;
+    fetch(base() + "/health").then(function(r){
+      if(!r.ok) throw new Error("Backend health check failed.");
+      return r.json();
+    }).then(function(){
+      location.replace(base() + "/");
+    }).catch(function(){
+      showConnectionHelp(fetchError(new TypeError("Backend unavailable")));
+    });
+  }
+
+  $("form").addEventListener("submit", async function(e){
+    e.preventDefault(); showErr("");
+    $("go").disabled = true;
+    try {
+      var m = readForm();
+      await call("/missions", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(m)});
+      $("form").reset();
+      redirectToServedDashboard();
+      refresh();
+    } catch(err){ showErr(fetchError(err)); }
+    $("go").disabled = false;
+  });
+
+  $("live").addEventListener("click", async function(){
+    showErr("");
+    var m;
+    try { m = readForm(); } catch(err){ return showErr(err.message); }
+    if(!m.name || !m.url || !m.goal) return showErr("Fill in the name, URL and goal first.");
+    $("liveBox").hidden = false;
+    var log = $("log"); log.textContent = "Starting mission…\n";
+    $("live").disabled = true;
+    try {
+      var r = await fetch(base() + "/missions/stream", {
+        method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(m)
+      });
+      if(!r.ok){
+        var message = "Backend returned " + r.status + " for /missions/stream";
+        try {
+          var body = await r.json();
+          if(body.detail) message += ": " + body.detail;
+        } catch(e){}
+        throw new Error(message);
+      }
+      var reader = r.body.getReader(), dec = new TextDecoder(), buf = "";
+      while(true){
+        var chunk = await reader.read();
+        if(chunk.done) break;
+        buf += dec.decode(chunk.value, {stream:true});
+        var lines = buf.split("\n"); buf = lines.pop();
+        lines.forEach(function(line){
+          if(!line.trim()) return;
+          var t = line.replace(/^data:\s*/, "");
+          try { t = JSON.stringify(JSON.parse(t), null, 1); } catch(e){}
+          log.textContent += t + "\n";
+          log.scrollTop = log.scrollHeight;
+        });
+      }
+      log.textContent += "Mission stream ended.\n";
+    } catch(err){
+      log.textContent += "Error: " + fetchError(err) + "\n";
+    }
+    $("live").disabled = false;
+  });
+
+  refresh();
+  polling = setInterval(refresh, 4000);
+})();
+</script>
+</body>
+</html>
